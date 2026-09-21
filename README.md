@@ -60,10 +60,6 @@ print(diag['cos_theta'])      # 看主角余弦, 判断 r 是否合理
 **必须注意**：时间子空间只有在同一条时间轴上才能求交，所以 `raw` 与 `raw_room` 必须**采样率相同、点数相同**。
 长度不同时函数会直接报错并提示先裁：
 
-```python
-raw      = raw.copy().crop(tmin=0., tmax=0.05)
-raw_room = raw_room.copy().crop(tmin=0., tmax=0.05)   # 采样率不同还需先 resample
-```
 
 ### 2) DSSP 双信号子空间投影
 
