@@ -34,11 +34,7 @@ pip install mne numpy scipy matplotlib
 
 ### 1) CTSP 公共时间子空间投影
 
-> 论文 *Removal of Stimulus-Induced Artifacts in Functional Spinal Cord Imaging*, EMBC 2013，式(1)–(8)
-
-**思路**：用「同一刺激、电极移开几厘米」再测一次，得到只含伪迹的对照测量 `A`。把两次测量的**时间子空间**
-求交（`cosθ ≈ 1` 的方向就是公共伪迹成分），再右乘投影算子把数据投到与该子空间正交的方向上：
-`B_clean = B (I − U_r U_rᵀ)`。
+> **思路**：用「同一刺激、电极移开几厘米」再测一次，得到只含伪迹的对照测量 `A`。把两次测量的**时间子空间**求交（`cosθ ≈ 1` 的方向就是公共伪迹成分），再右乘投影算子把数据投到与该子空间正交的方向上：`B_clean = B (I − U_r U_rᵀ)`。
 
 ```python
 ctsp(raw, raw_room, picks=None, Nout=None, Nin=None, Nee=None,
@@ -62,12 +58,7 @@ print(diag['cos_theta'])      # 看主角余弦, 判断 r 是否合理
 
 ### 2) DSSP 双信号子空间投影
 
-> 论文 *Dual signal subspace projection (DSSP)*, J. Neural Eng. 13 (2016) 036007，式(1)–(40)
-
-**思路**：利用信号子空间在空间域/时间域的对偶定义，**不需要单独的伪迹段测量**。先把源空间离散成体素、拼出
-增广引导场矩阵 `F = [L(r₁) … L(r_N)]`，对 Gram 矩阵 `FFᵀ` 做特征分解得到空间域伪信号子空间投影 `P`；再把数据分成
-里外两侧 `B_in = P·B`、`B_out = (I−P)·B` —— 由于 `P` 的「钝切」性质，源空间**外面**的干扰会同时出现在两侧，
-于是两侧**行空间（时间域）的交集**就是干扰子空间 `S_I`，最后右乘 `(I − GGᵀ)` 把它去掉。
+> **思路**：利用信号子空间在空间域/时间域的对偶定义，**不需要单独的伪迹段测量**。先把源空间离散成体素、拼出增广引导场矩阵 `F = [L(r₁) … L(r_N)]`，对 Gram 矩阵 `FFᵀ` 做特征分解得到空间域伪信号子空间投影 `P`；再把数据分成里外两侧 `B_in = P·B`、`B_out = (I−P)·B` —— 由于 `P` 的「钝切」性质，源空间**外面**的干扰会同时出现在两侧，于是两侧**行空间（时间域）的交集**就是干扰子空间 `S_I`，最后右乘 `(I − GGᵀ)` 把它去掉。
 
 ```python
 import mne
@@ -98,12 +89,7 @@ print(diag['gamma'], diag['cos_theta'], diag['r'])
 
 ### 3) S3P / pf-S3P 谱域信号子空间投影
 
-> 论文 *Spectral signal space projection algorithm for frequency domain MEG and EEG denoising, whitening, and source imaging*, NeuroImage 56 (2011) 78–92，式(8)–(15)，pf-S3P 见式(23)
-
-**思路**：很多噪声的空间图样是**随频率变化**的（工频及其谐波、环境振动……），所以投影算子也该逐频率设计：
-短时 FFT → 每个频率估计交叉谱密度矩阵 `Σ(f) = B̃(f)B̃ᴴ(f)/dτ` → 复特征分解 → 用前 n(f) 个特征向量构成
-**频率特异**的复投影算子 `P̃⊥(f) = I − EₙEₙᴴ` → 作用到时频数据 `B̃⊥(f) = P̃⊥(f)B̃(f)` → 逆变换回时域。
-与 FD-SSP 的区别就在于它用的是完整复特征向量、且逐频率作用在时频域。
+> **思路**：很多噪声的空间图样是**随频率变化**的（工频及其谐波、环境振动……），所以投影算子也该逐频率设计：短时 FFT → 每个频率估计交叉谱密度矩阵 `Σ(f) = B̃(f)B̃ᴴ(f)/dτ` → 复特征分解 → 用前 n(f) 个特征向量构成**频率特异**的复投影算子 `P̃⊥(f) = I − EₙEₙᴴ` → 作用到时频数据 `B̃⊥(f) = P̃⊥(f)B̃(f)` → 逆变换回时域。与 FD-SSP 的区别就在于它用的是完整复特征向量、且逐频率作用在时频域。
 
 ```python
 s3p(raw, raw_noise=None, picks=None, n_noise=1, mode='noise',
