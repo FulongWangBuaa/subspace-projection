@@ -99,7 +99,6 @@ pf_s3p(raw, **kwargs)      # = s3p(..., pf=True, n_noise=0): fully automatic, tr
 raw_clean = s3p(raw, raw_room, fmin=30, fmax=33, n_noise=1)   # process only 30-33 Hz
 raw_clean = s3p(raw, n_noise=3)                               # remove 3 dimensions at every frequency
 raw_clean = pf_s3p(raw, fmax=250.)                            # automatically suppress power-line noise and its harmonics
-removed   = raw - raw_clean                                   # the removed component, for QC
 ```
 
 ## References
