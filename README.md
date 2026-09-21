@@ -1,7 +1,6 @@
-# 子空间投影类伪迹去除工具箱 (Subspace-Projection Artifact Removal for OPM-MEG)
+# 子空间投影类伪影去除方法 (Subspace-Projection Artifact Removal for OPM-MEG)
 
-面向 **OPM脑磁图** 测量的预处理方法。它把三类「子空间投影」伪迹/干扰去除算法统一封装成
-`mne.io.Raw` 进、`mne.io.Raw` 出的函数，可以直接插进基于 MNE-Python 的分析流程。
+面向 **OPM-MEG** 测量的预处理方法，可以直接用于基于 MNE-Python 的分析流程。
 
 | 模块 | 方法 | 额外需要 | 参考论文 |
 |---|---|---|---|
@@ -16,8 +15,7 @@
 
 - [目录结构](#目录结构)
 - [环境依赖](#环境依赖)
-- [快速开始](#快速开始)
-- [三个方法](#三个方法)：[CTSP](#1-ctsp-公共时间子空间投影) · [DSSP](#2-dssp-对偶信号子空间投影) · [S3P / pf-S3P](#3-s3p--pf-s3p-谱域信号子空间投影)
+- [快速开始](#快速开始)：[CTSP](#1-ctsp-公共时间子空间投影) · [DSSP](#2-dssp-对偶信号子空间投影) · [S3P / pf-S3P](#3-s3p--pf-s3p-谱域信号子空间投影)
 - [参数速查](#参数速查)
 - [参考文献](#参考文献)
 
@@ -29,56 +27,11 @@
 ```bash
 pip install mne numpy scipy matplotlib
 ```
-
 - Python ≥ 3.9，MNE-Python ≥ 1.0（用到了 `mne.io.pick._picks_to_idx`、`mne.fixes._safe_svd` 这类内部接口，MNE 大版本升级时请留意）
-- S3P 对长记录做了分块处理，内存占用可控（见 `frame_block` / `max_csd_bytes`）
+
 
 
 ## 快速开始
-
-`main.py` 是完整的 cell 式流程（在 VS Code / Jupyter 里按 `# %%` 逐块运行）：
-
-```python
-# 1) 读取 .basedata → mne.io.Raw (64 磁强计 + Trigger)
-# 2) 滤波: raw.filter(2, 45).notch_filter(50)
-raw_filt      = raws[0].copy().filter(2, 45, fir_design='firwin').notch_filter(50)
-raw_room_filt = raws[1].copy().filter(2, 45, fir_design='firwin').notch_filter(50)
-
-# 3) CTSP: 用空房间那一套伪迹测量做对照; 注意两段要对齐且等长
-from wfl_preproc_ctsp import ctsp
-raw_ctsp = ctsp(raw_filt.copy().crop(tmin=0, tmax=raw_room_filt.times[-1]),
-                raw_room_filt, Nin=2, Nout=5, Nee=2)
-
-# 4) DSSP: 需要源空间导向场(BEM forward), 不需要伪迹段
-import mne
-subjects_dir, subject = r'D:\科研\MRI', 'wangfulong1'
-trans = mne.transforms.Transform('head', 'mri')      # 单位变换: 做过配准请换成真实 trans
-src = mne.setup_source_space(subject, spacing='oct6', add_dist='patch', subjects_dir=subjects_dir)
-bem = mne.make_bem_solution(mne.make_bem_model(subject=subject, ico=4,
-                                               conductivity=(0.3,), subjects_dir=subjects_dir))
-fwd = mne.make_forward_solution(raw_filt.info, trans=trans, src=src, bem=bem,
-                                meg=True, eeg=False, mindist=5.0, n_jobs=1)
-from wfl_preproc_dssp import dssp
-raw_dssp = dssp(raw_filt, fwd['sol']['data'], Nspace=5, picks='meg', Nee=3)
-
-# 5) S3P: 在指定频带内逐频率做空间投影; 也可以只削工频/谐波
-from wfl_preproc_s3p import s3p, pf_s3p
-raw_s3p   = s3p(raw_filt, raw_room_filt, fmin=30, fmax=33, n_noise=1)
-raw_clean = pf_s3p(raw_filt, fmax=250.)
-
-# 6) 用平均后的诱发响应做前后对比
-events = mne.find_events(raw_filt, stim_channel='Trigger')
-evoked = mne.Epochs(raw_s3p, events, tmin=-0.2, tmax=1,
-                    baseline=(-0.2, 0), preload=True).average()
-```
-
-所有函数都返回**新的** `Raw`（内部 `raw.copy()`），不会改动输入；坏道（`raw.info['bads']`）原样保留、不参与投影。
-
----
-
-## 三个方法
-
-记号：数据矩阵 `B`（M 个传感器 × K 个时间点），`B = B_S(信号) + B_I(干扰/伪迹) + B_e(噪声)`。
 
 ### 1) CTSP 公共时间子空间投影
 
