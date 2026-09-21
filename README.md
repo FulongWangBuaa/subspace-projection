@@ -122,6 +122,16 @@ raw_room = raw_room.copy().crop(tmin=0., tmax=0.05)   # 采样率不同还需先
 于是两侧**行空间（时间域）的交集**就是干扰子空间 `S_I`，最后右乘 `(I − GGᵀ)` 把它去掉。
 
 ```python
+import mne
+subjects_dir, subject = ***, *** # 替换为实际使用的
+trans = mne.transforms.Transform('head', 'mri')
+src = mne.setup_source_space(subject, spacing='oct6', add_dist='patch', subjects_dir=subjects_dir)
+bem = mne.make_bem_solution(mne.make_bem_model(subject=subject, ico=4,
+                                               conductivity=(0.3,), subjects_dir=subjects_dir))
+fwd = mne.make_forward_solution(raw_filt.info, trans=trans, src=src, bem=bem,
+                                meg=True, eeg=False, mindist=5.0, n_jobs=1)
+leadfield = fwd['sol']['data']
+
 dssp(raw, leadfield, picks=None, Nspace=None, Nin=20, Nout=20, Nee=None,
      st_correlation=0.99, space_tol=1e-3, rank_tol=1e-8, return_diag=False)
 ```
@@ -169,13 +179,6 @@ raw_clean = pf_s3p(raw, fmax=250.)                            # 自动削工频�
 removed   = raw - raw_clean                                   # 被去掉的分量, 用于 QC
 ```
 
-**两个实测出来的坑**：
-
-1. **窗函数谱泄漏**：单个单频干扰在 STFT 里会同时落在相邻 ±1 个 bin（Hann 窗主 bin 约 2/3 能量）。只对「正好那个频率」
-   投影只能去掉约 87%（实测残余 12.4%）；连 `59.75 / 60 / 60.25 Hz` 一起处理后残余降到 0.26%。所以要彻底压工频及谐波，
-   要么整带指定维数（`n_noise=1`），要么让 `pf_freqs` 覆盖邻近 bin，要么直接用 pf 自动模式。
-2. **pf-S3P 的判据是「比邻域百分位高就继续削」**，所以很窄的脑活动谱峰（如尖锐的 alpha）也可能被判成异常峰削掉；
-   论文也特意提醒不要把滑动频率窗用在感兴趣的窄带脑峰上，必要时用 `pf_freqs` 限定在已知噪声频率。
 
 ---
 
