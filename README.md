@@ -117,7 +117,7 @@ raw_room = raw_room.copy().crop(tmin=0., tmax=0.05)   # 采样率不同还需先
 > 论文 *Dual signal subspace projection (DSSP)*, J. Neural Eng. 13 (2016) 036007，式(1)–(40)
 
 **思路**：利用信号子空间在空间域/时间域的对偶定义，**不需要单独的伪迹段测量**。先把源空间离散成体素、拼出
-增广导向场 `F = [L(r₁) … L(r_N)]`，对 Gram 矩阵 `FFᵀ` 做特征分解得到空间域伪信号子空间投影 `P`；再把数据分成
+增广引导场矩阵 `F = [L(r₁) … L(r_N)]`，对 Gram 矩阵 `FFᵀ` 做特征分解得到空间域伪信号子空间投影 `P`；再把数据分成
 里外两侧 `B_in = P·B`、`B_out = (I−P)·B` —— 由于 `P` 的「钝切」性质，源空间**外面**的干扰会同时出现在两侧，
 于是两侧**行空间（时间域）的交集**就是干扰子空间 `S_I`，最后右乘 `(I − GGᵀ)` 把它去掉。
 
@@ -152,7 +152,7 @@ print(diag['gamma'], diag['cos_theta'], diag['r'])
 
 > 论文 *Spectral signal space projection algorithm for frequency domain MEG and EEG denoising, whitening, and source imaging*, NeuroImage 56 (2011) 78–92，式(8)–(15)，pf-S3P 见式(23)
 
-**思路**：很多噪声的空间图样是**随频率变化**的（工频及其谐波、环境振动、数字手表……），所以投影算子也该逐频率设计：
+**思路**：很多噪声的空间图样是**随频率变化**的（工频及其谐波、环境振动……），所以投影算子也该逐频率设计：
 短时 FFT → 每个频率估计交叉谱密度矩阵 `Σ(f) = B̃(f)B̃ᴴ(f)/dτ` → 复特征分解 → 用前 n(f) 个特征向量构成
 **频率特异**的复投影算子 `P̃⊥(f) = I − EₙEₙᴴ` → 作用到时频数据 `B̃⊥(f) = P̃⊥(f)B̃(f)` → 逆变换回时域。
 与 FD-SSP 的区别就在于它用的是完整复特征向量、且逐频率作用在时频域。
@@ -176,7 +176,6 @@ pf_s3p(raw, **kwargs)      # = s3p(..., pf=True, n_noise=0): 全自动只削异�
 raw_clean = s3p(raw, raw_room, fmin=30, fmax=33, n_noise=1)   # 只处理 30-33 Hz
 raw_clean = s3p(raw, n_noise=3)                               # 整带每频率剔 3 维
 raw_clean = pf_s3p(raw, fmax=250.)                            # 自动削工频及谐波
-removed   = raw - raw_clean                                   # 被去掉的分量, 用于 QC
 ```
 
 
@@ -198,8 +197,6 @@ removed   = raw - raw_clean                                   # 被去掉的分�
 | S3P | `win_len` / `win_step` / `taper` | STFFT 参数 | 4 s / 2 s / `'hann'`（论文用 Kaiser） |
 | S3P | `pf_*` | pf-S3P 自动维数 | `pf_percentile=50`、`pf_bw=None`、必要时 `pf_freqs` |
 
-三个函数都支持 `return_diag=True`，返回奇异值谱、主角余弦、自动维数、各频率功率等诊断量，
-**建议先跑一次看曲线再定参数**。
 
 
 
