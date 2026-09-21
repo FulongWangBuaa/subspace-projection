@@ -16,7 +16,6 @@
 - [目录结构](#目录结构)
 - [环境依赖](#环境依赖)
 - [快速开始](#快速开始)：[CTSP](#1-ctsp-公共时间子空间投影) · [DSSP](#2-dssp-对偶信号子空间投影) · [S3P / pf-S3P](#3-s3p--pf-s3p-谱域信号子空间投影)
-- [参数速查](#参数速查)
 - [参考文献](#参考文献)
 
 ---
@@ -127,25 +126,7 @@ raw_clean = s3p(raw, n_noise=3)                               # 整带每频率�
 raw_clean = pf_s3p(raw, fmax=250.)                            # 自动削工频及谐波
 ```
 
-
 ---
-
-
-## 参数速查
-
-| 方法 | 参数 | 含义 | 建议 |
-|---|---|---|---|
-| CTSP | `Nin` / `Nout` (q/p) | 两段各自取的时间奇异向量个数 | 取奇异值谱「明显大」的个数，可用 `'interactive'` 点曲线 |
-| CTSP | `Nee` (r) | 公共（干扰）子空间维数 | `cosθ ≥ 0.999` 的个数，或直接给整数 |
-| CTSP | `st_correlation` | cosθ 阈值（QR 分支） | 0.98 起；想更严格用 0.999 |
-| DSSP | `Nspace` (z) | 伪信号子空间维数 | 看 `log10(gamma)` 的拐点，先 `return_diag=True` |
-| DSSP | `Nin` / `Nout` (m/n) | 里外两侧行空间维数 | 20（论文值，不敏感，可放大） |
-| DSSP | `Nee` (r) | 干扰子空间维数 | `None` 自动（`cosθ ≥ 0.99`），必要时手动指定 |
-| S3P | `n_noise` | 每频率剔除的噪声维数 | 1~3；可用 dict 逐频率指定 |
-| S3P | `fmin` / `fmax` | 处理频带 | 只压工频就把带卡在峰值附近，记得覆盖 ±1 bin |
-| S3P | `win_len` / `win_step` / `taper` | STFFT 参数 | 4 s / 2 s / `'hann'`（论文用 Kaiser） |
-| S3P | `pf_*` | pf-S3P 自动维数 | `pf_percentile=50`、`pf_bw=None`、必要时 `pf_freqs` |
-
 
 
 
