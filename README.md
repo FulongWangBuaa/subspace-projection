@@ -73,3 +73,38 @@ dssp(raw, leadfield, picks=None, Nspace=None, Nin=20, Nout=20, Nee=None,
 - `Nspace`=z: how many of the "clearly large" eigenvalues of the Gram matrix to keep; the paper gives no quantitative criterion — pass an integer, `'interactive'` (click the knee of the log10 eigenvalue curve), `'auto'`, or `None` (prompt on the command line)
 - `Nin/Nout`=m, n: the paper recommends erring on the large side; all their real-data runs used 20 (the default, insensitive). Values beyond the effective rank are shrunk automatically with a warning
 - `Nee`=r: `None`/`'auto'` uses `cosθ ≥ 0.99`; as measured in the paper: r=6 (simulation), r=1 (VNS patient MEG), r=3 (real SCEF data)
+
+
+### 3) S3P/pf-S3P — Spectral Signal Space Projection
+> **Idea**: the spatial patterns of many noise sources are **frequency-dependent** (power-line noise and its harmonics, environmental vibrations, digital watches, …), so the projection operator should also be designed per frequency:
+short-time FFT → estimate the cross-spectral density (CSD) matrix `Σ(f) = B̃(f)B̃ᴴ(f)/dτ` at each frequency → complex eigendecomposition → build the **frequency-specific** complex projection operator `P̃⊥(f) = I − EₙEₙᴴ` from the first n(f) eigenvectors → apply it to the time–frequency data `B̃⊥(f) = P̃⊥(f)B̃(f)` → inverse-transform back to the time domain.
+The difference from FD-SSP is that it uses the full complex eigenvectors and acts per frequency in the time–frequency domain.
+
+```python
+s3p(raw, raw_noise=None, picks=None, n_noise=1, mode='noise',
+    fmin=0.0, fmax=None, win_len=4.0, win_step=None, taper='hann',
+    kaiser_beta=8.6, demean=True, restore_mean=True,
+    pf=False, pf_percentile=50.0, pf_bw=None, pf_freqs=None, pf_max_dim=10,
+    frame_block=8, max_csd_bytes=2**28, return_diag=False)
+
+pf_s3p(raw, **kwargs)      # = s3p(..., pf=True, n_noise=0): fully automatic, trims outlying spectral peaks only
+```
+
+- `n_noise`: number of noise-subspace dimensions removed at each frequency; a scalar, a per-frequency array, a dict such as `{60.: 2, 120.: 1}`, or a callable `f -> dim` all work
+- `raw_noise`: another recording used to estimate the CSD / noise subspace (empty room, resting segment, …); when `None`, `raw` itself is used (the paper's default)
+- `fmin/fmax`: project only within this frequency band; bins outside the band are passed through unchanged. `win_len/win_step/taper`: STFFT parameters (the paper used a 4 s window, 2 s overlap and a Kaiser taper)
+- `pf*`: percentile, sliding-window bandwidth and frequency limits of pf-S3P
+
+```python
+raw_clean = s3p(raw, raw_room, fmin=30, fmax=33, n_noise=1)   # process only 30-33 Hz
+raw_clean = s3p(raw, n_noise=3)                               # remove 3 dimensions at every frequency
+raw_clean = pf_s3p(raw, fmax=250.)                            # automatically suppress power-line noise and its harmonics
+removed   = raw - raw_clean                                   # the removed component, for QC
+```
+
+## References
+
+1. T. Watanabe, Y. Kawabata, D. Ukegawa, S. Kawabata, Y. Adachi, K. Sekihara. **Removal of Stimulus-Induced Artifacts in Functional Spinal Cord Imaging.** 35th Annual Int. Conf. of the IEEE EMBS, Osaka, 2013, pp. 3391–3394.
+2. K. Sekihara, Y. Kawabata, S. Ushio, S. Sumiya, S. Kawabata, Y. Adachi, S. S. Nagarajan. **Dual signal subspace projection (DSSP): a novel algorithm for removing large interference in biomagnetic measurements.** J. Neural Eng. 13 (2016) 036007.
+3. R. R. Ramírez, B. H. Kopell, C. R. Butson, B. C. Hiner, S. Baillet. **Spectral signal space projection algorithm for frequency domain MEG and EEG denoising, whitening, and source imaging.** NeuroImage 56 (2011) 78–92.
+
