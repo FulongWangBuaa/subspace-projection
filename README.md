@@ -1,68 +1,62 @@
-# 子空间投影类伪影去除方法 (Subspace-Projection Artifact Removal for OPM-MEG)
+# Subspace-Projection Artifact Removal for OPM-MEG
 
-面向 **OPM-MEG** 测量的预处理方法，可以直接用于基于 MNE-Python 的分析流程。
+Preprocessing methods for **OPM-MEG** measurements, ready to be plugged into an MNE-Python-based analysis pipeline.
 
-| 模块 | 方法 | 额外需要 | 参考论文 |
-|---|---|---|---|
-| `wfl_preproc_ctsp.py` | **CTSP** 公共时间子空间投影 | 一段伪迹(对照)测量 | Watanabe et al., EMBC 2013 |
-| `wfl_preproc_dssp.py` | **DSSP** 对偶信号子空间投影 | 源空间引导场 / `mne.Forward` | Sekihara et al., J. Neural Eng. 2016 |
-| `wfl_preproc_s3p.py` | **S3P** 谱域信号子空间投影 (含 pf-S3P) | 无(可选空房间) | Ramírez et al., NeuroImage 2011 |
-
-
----
-
-## 目录
-
-- [目录结构](#目录结构)
-- [环境依赖](#环境依赖)
-- [快速开始](#快速开始)：[CTSP](#1-ctsp-公共时间子空间投影) · [DSSP](#2-dssp-对偶信号子空间投影) · [S3P / pf-S3P](#3-s3p--pf-s3p-谱域信号子空间投影)
-- [参考文献](#参考文献)
+| Module                | Method                                            | Also requires                          | Reference                            |
+| --------------------- | ------------------------------------------------- | -------------------------------------- | ------------------------------------ |
+| `wfl_preproc_ctsp.py` | **CTSP** common temporal subspace projection       | One artifact (control) recording       | Watanabe et al., EMBC 2013           |
+| `wfl_preproc_dssp.py` | **DSSP** dual signal subspace projection           | Source-space lead field / `mne.Forward`| Sekihara et al., J. Neural Eng. 2016 |
+| `wfl_preproc_s3p.py`  | **S3P** spectral signal space projection (incl. pf-S3P) | None (empty room optional)       | Ramírez et al., NeuroImage 2011      |
 
 ---
 
+## Table of Contents
 
-## 环境依赖
+- [Repository layout](#repository-layout)
+- [Requirements](#requirements)
+- [Quick start](#quick-start): [CTSP](#1-ctsp-common-temporal-subspace-projection) · [DSSP](#2-dssp-dual-signal-subspace-projection) · [S3P / pf-S3P](#3-s3p--pf-s3p-spectral-signal-space-projection)
+- [References](#references)
+
+---
+
+## Requirements
 
 ```bash
 pip install mne numpy scipy matplotlib
 ```
-- Python ≥ 3.9，MNE-Python ≥ 1.0（用到了 `mne.io.pick._picks_to_idx`、`mne.fixes._safe_svd` 这类内部接口，MNE 大版本升级时请留意）
 
+- Python ≥ 3.9, MNE-Python ≥ 1.0 (uses internal APIs such as `mne.io.pick._picks_to_idx` and `mne.fixes._safe_svd`; watch out when upgrading across MNE major versions)
 
+## Quick Start
 
-## 快速开始
+### 1) CTSP — Common Temporal Subspace Projection
 
-### 1) CTSP 公共时间子空间投影
-
-> **思路**：用「同一刺激、电极移开几厘米」再测一次，得到只含伪迹的对照测量 `A`。把两次测量的**时间子空间**求交（`cosθ ≈ 1` 的方向就是公共伪迹成分），再右乘投影算子把数据投到与该子空间正交的方向上：`B_clean = B (I − U_r U_rᵀ)`。
+> **Idea**: acquire a second recording with the same stimulus but with the stimulation electrode moved a few centimetres away, which yields a control measurement `A` containing the artifact only. Intersect the **temporal subspaces** of the two recordings (the directions with `cosθ ≈ 1` are the common artifact components), then right-multiply the projection operator that maps the data onto the subspace orthogonal to it: `B_clean = B (I − U_r U_rᵀ)`.
 
 ```python
 ctsp(raw, raw_room, picks=None, Nout=None, Nin=None, Nee=None,
      st_correlation=0.98, power_correction=True, return_diag=False)
 ```
 
-- `Nin`=q、`Nout`=p：两段各自取多少个「显著大」的时间奇异向量
-- `Nee`=r：交集维数；给小于 1 的数值时按 cosθ 阈值处理
-- **两个分支**：`Nin`、`Nout`、`Nee` 三个都给 → 论文分支（截断 SVD，式(6)–(8)）；否则 → `st_correlation` 分支
-  （`cosθ ≥ st_correlation` 自动定 r，MNE tSSS 风格的 QR 实现）；只给其中一两个维数会告警并回落到后者
-- `power_correction=True`：先按论文 III.B 节做逐通道功率校正（把 `A` 的幅度按最小二乘对齐到 `B`）
+- `Nin`=q, `Nout`=p: how many "distinctively large" temporal singular vectors each of the two recordings contributes
+- `Nee`=r: dimension of the intersection; a value smaller than 1 is treated as a cosθ threshold
+- **Two branches**: if `Nin`, `Nout` and `Nee` are all supplied → paper branch (truncated SVD, Eqs. (6)–(8)); otherwise → `st_correlation` branch (`cosθ ≥ st_correlation` determines r automatically; QR implementation in the MNE tSSS style). Supplying only one or two of the dimensions raises a warning and falls back to the latter branch
+- `power_correction=True`: first apply the per-channel power correction of Sec. III.B of the paper (least-squares matching of the amplitude of `A` to `B`)
 
 ```python
 raw_clean, diag = ctsp(raw, raw_room, Nin=2, Nout=5, Nee=2, return_diag=True)
-print(diag['cos_theta'])      # 看主角余弦, 判断 r 是否合理
+print(diag['cos_theta'])      # inspect the principal angles to judge whether r is reasonable
 ```
 
-**必须注意**：时间子空间只有在同一条时间轴上才能求交，所以 `raw` 与 `raw_room` 必须**采样率相同、点数相同**。
-长度不同时函数会直接报错并提示先裁：
+**Important**: temporal subspaces can only be intersected on a shared time axis, so `raw` and `raw_room` must have the **same sampling rate and the same number of samples**. If their lengths differ, the function raises an error and tells you to crop first.
 
+### 2) DSSP — Dual Signal Subspace Projection
 
-### 2) DSSP 双信号子空间投影
-
-> **思路**：利用信号子空间在空间域/时间域的对偶定义，**不需要单独的伪迹段测量**。先把源空间离散成体素、拼出增广引导场矩阵 `F = [L(r₁) … L(r_N)]`，对 Gram 矩阵 `FFᵀ` 做特征分解得到空间域伪信号子空间投影 `P`；再把数据分成里外两侧 `B_in = P·B`、`B_out = (I−P)·B` —— 由于 `P` 的「钝切」性质，源空间**外面**的干扰会同时出现在两侧，于是两侧**行空间（时间域）的交集**就是干扰子空间 `S_I`，最后右乘 `(I − GGᵀ)` 把它去掉。
+> **Idea**: exploit the dual definition of the signal subspace in the spatial and temporal domains — **no separate artifact recording is needed**. Discretise the source space into voxels and assemble the augmented lead field matrix `F = [L(r₁) … L(r_N)]`, then eigendecompose the Gram matrix `FFᵀ` to obtain the spatial-domain pseudo signal subspace projector `P`; next split the data into an inside and an outside part, `B_in = P·B` and `B_out = (I−P)·B`. Because of the "dull" cutoff property of `P`, interference from **outside** the source space appears on both sides, so the intersection of the two **row spaces (temporal subspaces)** is the interference subspace `S_I`; finally right-multiply by `(I − GGᵀ)` to remove it.
 
 ```python
 import mne
-subjects_dir, subject = ***, *** # 替换为实际使用的
+subjects_dir, subject = ***, ***  # replace with the values actually used
 trans = mne.transforms.Transform('head', 'mri')
 src = mne.setup_source_space(subject, spacing='oct6', add_dist='patch', subjects_dir=subjects_dir)
 bem = mne.make_bem_solution(mne.make_bem_model(subject=subject, ico=4,
@@ -75,51 +69,7 @@ dssp(raw, leadfield, picks=None, Nspace=None, Nin=20, Nout=20, Nee=None,
      st_correlation=0.99, space_tol=1e-3, rank_tol=1e-8, return_diag=False)
 ```
 
-- `leadfield`：`(n_channels, D)` 矩阵（论文的 `F`）或 `mne.Forward`（自动取它的 gain matrix）
-- `Nspace`=z：Gram 矩阵取前多少个「明显大」的特征值；论文没给定量准则，可给整数、`'interactive'`
-  （点 log10 特征值曲线的拐点）、`'auto'` 或 `None`（命令行输入）
-- `Nin/Nout`=m、n：论文建议「宁可取大」，实测一律 20（默认，不敏感）；超过有效秩会自动收缩并告警
-- `Nee`=r：`None`/`'auto'` 时按 `cosθ ≥ 0.99` 自动定；论文实测：模拟 r=6、VNS 病人 MEG r=1、真实 SCEF r=3
-
-```python
-raw_clean, diag = dssp(raw, fwd, Nspace=5, picks='meg', Nee=3, return_diag=True)
-print(diag['gamma'], diag['cos_theta'], diag['r'])
-```
-
-
-### 3) S3P / pf-S3P 谱域信号子空间投影
-
-> **思路**：很多噪声的空间图样是**随频率变化**的（工频及其谐波、环境振动……），所以投影算子也该逐频率设计：短时 FFT → 每个频率估计交叉谱密度矩阵 `Σ(f) = B̃(f)B̃ᴴ(f)/dτ` → 复特征分解 → 用前 n(f) 个特征向量构成**频率特异**的复投影算子 `P̃⊥(f) = I − EₙEₙᴴ` → 作用到时频数据 `B̃⊥(f) = P̃⊥(f)B̃(f)` → 逆变换回时域。与 FD-SSP 的区别就在于它用的是完整复特征向量、且逐频率作用在时频域。
-
-```python
-s3p(raw, raw_noise=None, picks=None, n_noise=1, mode='noise',
-    fmin=0.0, fmax=None, win_len=4.0, win_step=None, taper='hann',
-    kaiser_beta=8.6, demean=True, restore_mean=True,
-    pf=False, pf_percentile=50.0, pf_bw=None, pf_freqs=None, pf_max_dim=10,
-    frame_block=8, max_csd_bytes=2**28, return_diag=False)
-
-pf_s3p(raw, **kwargs)      # = s3p(..., pf=True, n_noise=0): 全自动只削异常谱峰
-```
-
-- `n_noise`：每个频率剔除的噪声子空间维数；标量、逐频率数组、`{60.: 2, 120.: 1}` 字典、或 `f -> dim` 可调用对象都行
-- `raw_noise`：用来估计 CSD / 噪声子空间的另一段记录（空房间、静息段…）；`None` 时用 `raw` 自己估计（论文默认做法）
-- `fmin/fmax`：只在该频带内投影，带外原样通过；`win_len/win_step/taper`：STFFT 参数（论文用 4 s 窗、2 s 重叠、Kaiser taper）
-- `pf*`：pf-S3P 的百分位、滑窗带宽、限定频率等
-
-```python
-raw_clean = s3p(raw, raw_room, fmin=30, fmax=33, n_noise=1)   # 只处理 30-33 Hz
-raw_clean = s3p(raw, n_noise=3)                               # 整带每频率剔 3 维
-raw_clean = pf_s3p(raw, fmax=250.)                            # 自动削工频及谐波
-```
-
----
-
-
-
-## 参考文献
-
-1. T. Watanabe, Y. Kawabata, D. Ukegawa, S. Kawabata, Y. Adachi, K. Sekihara. *Removal of Stimulus-Induced Artifacts in Functional Spinal Cord Imaging.* 35th Annual Int. Conf. of the IEEE EMBS, Osaka, 2013, pp. 3391–3394.
-2. K. Sekihara, Y. Kawabata, S. Ushio, S. Sumiya, S. Kawabata, Y. Adachi, S. S. Nagarajan. *Dual signal subspace projection (DSSP): a novel algorithm for removing large interference in biomagnetic measurements.* J. Neural Eng. 13 (2016) 036007.
-3. R. R. Ramírez, B. H. Kopell, C. R. Butson, B. C. Hiner, S. Baillet. *Spectral signal space projection algorithm for frequency domain MEG and EEG denoising, whitening, and source imaging.* NeuroImage 56 (2011) 78–92.
-
-
+- `leadfield`: an `(n_channels, D)` matrix (the paper's `F`) or an `mne.Forward` (its gain matrix is taken automatically)
+- `Nspace`=z: how many of the "clearly large" eigenvalues of the Gram matrix to keep; the paper gives no quantitative criterion — pass an integer, `'interactive'` (click the knee of the log10 eigenvalue curve), `'auto'`, or `None` (prompt on the command line)
+- `Nin/Nout`=m, n: the paper recommends erring on the large side; all their real-data runs used 20 (the default, insensitive). Values beyond the effective rank are shrunk automatically with a warning
+- `Nee`=r: `None`/`'auto'` uses `cosθ ≥ 0.99`; as measured in the paper: r=6 (simulation), r=1 (VNS patient MEG), r=3 (real SCEF data)
